@@ -1,7 +1,17 @@
 #pragma once
-#include "Godmode.h"
 #include "WString.h"
 #include "Print.h"
+
+
+// compatability macros for testing
+/*
+#define   getInt()            parseInt()
+#define   getInt(ignore)    parseInt(ignore)
+#define   getFloat()          parseFloat()
+#define   getFloat(ignore)  parseFloat(ignore)
+#define   getString( pre_string, post_string, buffer, length)
+readBytesBetween( pre_string, terminator, buffer, length)
+*/
 
 // This enumeration provides the lookahead options for parseInt(), parseFloat()
 // The rules set out here are used until either the first valid character is found
@@ -16,197 +26,83 @@ enum LookaheadMode{
 
 class Stream : public Print
 {
-  public:
-    String* mGodmodeDataIn;
-    unsigned long* mGodmodeMicrosDelay;
-
   protected:
-    unsigned long mTimeoutMillis;
-
-    void fastforward(int pos) {
-      mGodmodeDataIn->assign(mGodmodeDataIn->substring(pos));
-    }
-
-    char fastforwardToAnyChar(LookaheadMode lookahead, String chars) {
-      char c;
-      while ((c = peek()) != -1) {
-        if (chars.find(c) != String::npos) return c;
-        if (lookahead == SKIP_NONE) return -1;
-        if (lookahead == SKIP_WHITESPACE && !isWhitespace(c)) return -1;
-        read();
-      }
-      return -1;
-    }
-
-    // int timedRead();    // read stream with timeout
-    // int timedPeek();    // peek stream with timeout
-    // int peekNextDigit(LookaheadMode lookahead, bool detectDecimal); // returns the next numeric digit in the stream or -1 if timeout
+    unsigned long _timeout;      // number of milliseconds to wait for the next char before aborting timed read
+    unsigned long _startMillis;  // used for timeout measurement
+    int timedRead();    // read stream with timeout
+    int timedPeek();    // peek stream with timeout
+    int peekNextDigit(LookaheadMode lookahead, bool detectDecimal); // returns the next numeric digit in the stream or -1 if timeout
 
   public:
-    virtual int available() { return mGodmodeDataIn->length(); }
+    virtual int available() = 0;
+    virtual int read() = 0;
+    virtual int peek() = 0;
 
-    virtual int peek() { return available() ? (int)((*mGodmodeDataIn)[0]) : -1; }
+    Stream() {_timeout=1000;}
 
-    virtual int read() {
-      int ret = peek();
-      if (ret != -1) {
-        fastforward(1);
-        if (mGodmodeMicrosDelay) delayMicroseconds(*mGodmodeMicrosDelay);
-      }
-      return ret;
-    }
+// parsing methods
 
-    // https://stackoverflow.com/a/4271276
-    using Print::write;
+  void setTimeout(unsigned long timeout);  // sets maximum milliseconds to wait for stream data, default is 1 second
+  unsigned long getTimeout(void) { return _timeout; }
+  
+  bool find(char *target);   // reads data from the stream until the target string is found
+  bool find(uint8_t *target) { return find ((char *)target); }
+  // returns true if target string is found, false if timed out (see setTimeout)
 
-    virtual size_t write(uint8_t aChar) { mGodmodeDataIn->append(String((char)aChar)); return 1; }
+  bool find(char *target, size_t length);   // reads data from the stream until the target string of given length is found
+  bool find(uint8_t *target, size_t length) { return find ((char *)target, length); }
+  // returns true if target string is found, false if timed out
 
-    Stream() {
-      mTimeoutMillis = 1000;
-      mGodmodeMicrosDelay = NULL;
-      mGodmodeDataIn = NULL;
-    }
+  bool find(char target) { return find (&target, 1); }
 
+  bool findUntil(char *target, char *terminator);   // as find but search ends if the terminator string is found
+  bool findUntil(uint8_t *target, char *terminator) { return findUntil((char *)target, terminator); }
 
-    void setTimeout(unsigned long timeoutMillis) { mTimeoutMillis = timeoutMillis; };
-    unsigned long getTimeout(void) { return mTimeoutMillis; }
+  bool findUntil(char *target, size_t targetLen, char *terminate, size_t termLen);   // as above but search ends if the terminate string is found
+  bool findUntil(uint8_t *target, size_t targetLen, char *terminate, size_t termLen) {return findUntil((char *)target, targetLen, terminate, termLen); }
 
-    bool find(const String &s) {
-      long idx;
-      if ((idx = mGodmodeDataIn->find(s)) != String::npos) {
-        fastforward(idx);
-        return true;
-      }
-      return false;
-    }
+  long parseInt(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR);
+  // returns the first valid (long) integer value from the current position.
+  // lookahead determines how parseInt looks ahead in the stream.
+  // See LookaheadMode enumeration at the top of the file.
+  // Lookahead is terminated by the first character that is not a valid part of an integer.
+  // Once parsing commences, 'ignore' will be skipped in the stream.
 
-    bool find(char *target)                   { return find(String(target)); }
-    bool find(uint8_t *target)                { return find(String((char*)target)); }
-    bool find(char *target, size_t length)    { return find(String(string(target, length))); }
-    bool find(uint8_t *target, size_t length) { return find(String(string((char*)target, length))); }
-    bool find(char target)                    { return find(String(string(&target, 1))); }
+  float parseFloat(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR);
+  // float version of parseInt
 
-    bool findUntil(const String &target, const String &terminator) {
-      long idxTgt = mGodmodeDataIn->find(target);
-      long idxTrm = mGodmodeDataIn->find(terminator);
-      if (idxTgt == String::npos) {
-        mGodmodeDataIn->clear();
-        return false; // didn't find it
-      }
-      if (idxTrm != String::npos || idxTrm < idxTgt) {
-        fastforward(idxTrm);
-        return false;  // target found after term
-      }
-      return find(target);
-    }
+  size_t readBytes( char *buffer, size_t length); // read chars from stream into buffer
+  size_t readBytes( uint8_t *buffer, size_t length) { return readBytes((char *)buffer, length); }
+  // terminates if length characters have been read or timeout (see setTimeout)
+  // returns the number of characters placed in the buffer (0 means no valid data found)
 
-    bool findUntil(char *target, char *terminator)    { return findUntil(String(target), String(terminator)); }
-    bool findUntil(uint8_t *target, char *terminator) { return findUntil(String((char *)target), String(terminator)); }
-    bool findUntil(char *target, size_t targetLen, char *terminate, size_t termLen) {
-      return findUntil(String(string(target, targetLen)), String(string(terminate, termLen)));
-    }
-    bool findUntil(uint8_t *target, size_t targetLen, char *terminate, size_t termLen) {
-      return findUntil(String(string((char *)target, targetLen)), String(string(terminate, termLen)));
-    }
+  size_t readBytesUntil( char terminator, char *buffer, size_t length); // as readBytes with terminator character
+  size_t readBytesUntil( char terminator, uint8_t *buffer, size_t length) { return readBytesUntil(terminator, (char *)buffer, length); }
+  // terminates if length characters have been read, timeout, or if the terminator character  detected
+  // returns the number of characters placed in the buffer (0 means no valid data found)
 
-    // returns the first valid (long) integer value from the current position.
-    // lookahead determines how parseInt looks ahead in the stream.
-    // See LookaheadMode enumeration at the top of the file.
-    // Lookahead is terminated by the first character that is not a valid part of an integer.
-    // Once parsing commences, 'ignore' will be skipped in the stream.
-    long parseInt(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR) {
-      String digits = "1234567890";
-      if (fastforwardToAnyChar(lookahead, digits + "-") == -1) return 0;
-      String out = String((char)read()); // read unconditionally -- might be a minus
-      char c;
-      bool keepGoing = true;
-      do {
-        c = peek();
-        if (c == -1) break;
-        if (c != ignore || ignore == NO_IGNORE_CHAR) out += c;
-        keepGoing = digits.find(c) != String::npos;
-        if (!keepGoing) break;
-        read();
-      } while (true);
-      return out.toInt();
-    }
-
-    float parseFloat(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR) {
-      String digits = "1234567890";
-      if (fastforwardToAnyChar(lookahead, digits + "-") == -1) return 0;
-      String out = String((char)read()); // read unconditionally -- might be a minus
-      String bank = digits + ".";
-      bool gotDot = false;
-      bool keepGoing = true;
-      char c;
-      do {
-        c = peek();
-        if (c == -1) break;
-        if (c == '.') {       // waiting for gotDot
-          if (gotDot) break;
-          gotDot = true;
-        }
-        if (c != ignore || ignore == NO_IGNORE_CHAR) out += c;
-        keepGoing = bank.find(c) != String::npos;
-        if (!keepGoing) break;
-        read();
-      } while (true);
-      return out.toFloat();
-    }
-
-    // read chars from stream into buffer
-    // returns the number of characters placed in the buffer (0 means no valid data found)
-    size_t readBytes(char *buffer, size_t length) {
-      size_t ret = mGodmodeDataIn->copy(buffer, length);
-      if (mGodmodeMicrosDelay) delayMicroseconds(*mGodmodeMicrosDelay * ret);
-      fastforward(ret);
-      return ret;
-    }
-
-    // read chars from stream into buffer
-    // returns the number of characters placed in the buffer (0 means no valid data found)
-    size_t readBytes(uint8_t *buffer, size_t length) { return readBytes((char *)buffer, length); }
-
-    // read chars from stream into buffer
-    // returns the number of characters placed in the buffer (0 means no valid data found)
-    size_t readBytesUntil(char terminator, char *buffer, size_t length) {
-      size_t idx = mGodmodeDataIn->find(terminator);
-      size_t howMuch = idx == String::npos ? length : min(length, idx);
-      return readBytes(buffer, howMuch);
-    }
-
-    // read chars from stream into buffer
-    // returns the number of characters placed in the buffer (0 means no valid data found)
-    size_t readBytesUntil(char terminator, uint8_t *buffer, size_t length) { return readBytesUntil(terminator, (char *)buffer, length); }
-
-    String readStringUntil(char terminator) {
-      long idxTrm = mGodmodeDataIn->find(terminator);
-      String ret;
-      if (idxTrm == String::npos) {
-        ret = String(*mGodmodeDataIn);
-        mGodmodeDataIn->clear();
-      } else {
-        ret = mGodmodeDataIn->substring(0, idxTrm + 1);
-        fastforward(idxTrm + 1);
-      }
-      return ret;
-    }
-
-    String readString() {
-      String ret(*mGodmodeDataIn);
-      mGodmodeDataIn->clear();
-      return ret;
-    }
-
+  // Arduino String functions to be added here
+  String readString();
+  String readStringUntil(char terminator);
 
   protected:
-    long parseInt(char ignore) { return parseInt(SKIP_ALL, ignore); }
-    float parseFloat(char ignore) { return parseFloat(SKIP_ALL, ignore); }
-    // These overload exists for compatibility with any class that has derived
-    // Stream and used parseFloat/Int with a custom ignore character. To keep
-    // the public API simple, these overload remains protected.
+  long parseInt(char ignore) { return parseInt(SKIP_ALL, ignore); }
+  float parseFloat(char ignore) { return parseFloat(SKIP_ALL, ignore); }
+  // These overload exists for compatibility with any class that has derived
+  // Stream and used parseFloat/Int with a custom ignore character. To keep
+  // the public API simple, these overload remains protected.
 
+  struct MultiTarget {
+    const char *str;  // string you're searching for
+    size_t len;       // length of string you're searching for
+    size_t index;     // index used by the search routine.
+  };
+
+  // This allows you to search for an arbitrary number of strings.
+  // Returns index of the target that is found first or -1 if timeout occurs.
+  int findMulti(struct MultiTarget *targets, int tCount);
 };
+
 
 #undef NO_IGNORE_CHAR
 

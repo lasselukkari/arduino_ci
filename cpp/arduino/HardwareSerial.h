@@ -1,7 +1,7 @@
 #pragma once
 
+#include <Stream.h>
 //#include <inttypes.h>
-#include "ci/StreamTape.h"
 
 // definitions neeeded for Serial.begin's config arg
 #define SERIAL_5N1 0x00
@@ -29,35 +29,14 @@
 #define SERIAL_7O2 0x3C
 #define SERIAL_8O2 0x3E
 
-class HardwareSerial : public StreamTape
+class HardwareSerial : public Stream
 {
   public:
-    HardwareSerial(String* dataIn, String* dataOut, unsigned long* delay): StreamTape(dataIn, dataOut, delay) {}
+    HardwareSerial(String* dataIn, String* dataOut, unsigned long* delay) {}
 
     void begin(unsigned long baud) { begin(baud, SERIAL_8N1); }
     void begin(unsigned long baud, uint8_t config) {
-      *mGodmodeMicrosDelay = 1000000 / baud;
+
     }
     void end() {}
-
-    // support "if (Serial1) {}" sorts of things
-    operator bool() { return true; }
 };
-
-#if defined(UBRRH) || defined(UBRR0H)
-  extern HardwareSerial Serial;
-  #define HAVE_HWSERIAL0
-#endif
-#if defined(UBRR1H)
-  extern HardwareSerial Serial1;
-  #define HAVE_HWSERIAL1
-#endif
-#if defined(UBRR2H)
-  extern HardwareSerial Serial2;
-  #define HAVE_HWSERIAL2
-#endif
-#if defined(UBRR3H)
-  extern HardwareSerial Serial3;
-  #define HAVE_HWSERIAL3
-#endif
-

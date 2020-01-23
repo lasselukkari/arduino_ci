@@ -14,8 +14,6 @@ Where possible, variable names from the Arduino library are used to avoid confli
 #include "Print.h"
 #include "Stream.h"
 #include "HardwareSerial.h"
-#include "SPI.h"
-#include "Wire.h"
 
 typedef bool boolean;
 typedef uint8_t byte;
@@ -55,9 +53,6 @@ typedef uint8_t byte;
 typedef unsigned int word;
 
 #define bit(b) (1UL << (b))
-
-
-
 
 // Get the bit location within the hardware port of the given virtual pin.
 // This comes from the pins_*.c file for the active board configuration.

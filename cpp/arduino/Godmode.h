@@ -2,7 +2,6 @@
 #include "ArduinoDefines.h"
 #include <avr/io.h>
 #include "WString.h"
-#include "PinHistory.h"
 
 // random
 void randomSeed(unsigned long seed);
@@ -30,98 +29,6 @@ unsigned long micros();
   #define NUM_SERIAL_PORTS 0
 #endif
 
-class GodmodeState {
-  private:
-    struct PortDef {
-      String dataIn;
-      String dataOut;
-      unsigned long readDelayMicros;
-    };
-
-    struct InterruptDef {
-      bool attached;
-      uint8_t mode;
-    };
-
-    static GodmodeState* instance;
-
-  public:
-    unsigned long micros;
-    unsigned long seed;
-    // not going to put pinmode here unless its really needed. can't think of why it would be
-    PinHistory<bool> digitalPin[MOCK_PINS_COUNT];
-    PinHistory<int> analogPin[MOCK_PINS_COUNT];
-    struct PortDef serialPort[NUM_SERIAL_PORTS];
-    struct InterruptDef interrupt[MOCK_PINS_COUNT]; // not sure how to get actual number
-    struct PortDef spi;
-
-    void resetPins() {
-      for (int i = 0; i < MOCK_PINS_COUNT; ++i) {
-        digitalPin[i].reset(LOW);
-        analogPin[i].reset(0);
-      }
-    }
-
-    void resetClock() {
-      micros = 0;
-    }
-
-    void resetInterrupts() {
-      for (int i = 0; i < MOCK_PINS_COUNT; ++i) {
-        interrupt[i].attached = false;
-      }
-    }
-
-    void resetPorts() {
-      for (int i = 0; i < serialPorts(); ++i)
-      {
-        serialPort[i].dataIn = "";
-        serialPort[i].dataOut = "";
-        serialPort[i].readDelayMicros = 0;
-      }
-    }
-
-    void resetSPI() {
-      spi.dataIn = "";
-      spi.dataOut = "";
-      spi.readDelayMicros = 0;
-    }
-
-    void reset() {
-      resetClock();
-      resetPins();
-      resetInterrupts();
-      resetPorts();
-      resetSPI();
-      seed = 1;
-    }
-
-    int serialPorts() {
-      return NUM_SERIAL_PORTS;
-    }
-
-    // Using this for anything other than unit testing arduino_ci itself
-    // is unsupported at the moment
-    void overrideClockTruth(unsigned long (*getMicros)(void)) {
-    }
-
-    // singleton pattern
-    static GodmodeState* getInstance();
-
-    static unsigned long getMicros() {
-      return instance->micros;
-    }
-
-    // C++ 11, declare as public for better compiler error messages
-    GodmodeState(GodmodeState const&) = delete;
-    void operator=(GodmodeState const&) = delete;
-
-  private:
-    GodmodeState() {
-      reset();
-    }
-};
-
 // io pins
 #define pinMode(...) _NOP()
 #define analogReference(...) _NOP()
@@ -139,5 +46,3 @@ void detachInterrupt(uint8_t interrupt);
 inline void tone(uint8_t _pin, unsigned int frequency, unsigned long duration = 0) {}
 inline void noTone(uint8_t _pin) {}
 
-
-GodmodeState* GODMODE();
