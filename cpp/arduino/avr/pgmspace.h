@@ -27,6 +27,9 @@ out.each { |l| puts d(l) }
 #define PGM_VOID_P const void *
 #endif
 
+typedef intptr_t int_farptr_t;
+typedef uintptr_t uint_farptr_t;
+
 // everything's a no-op
 #define PSTR(s) ((const char *)(s))
 
